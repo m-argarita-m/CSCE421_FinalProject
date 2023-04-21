@@ -86,10 +86,10 @@ def preprocess_x(df):
     df = df.drop(encode_features, axis=1)
 
     # normalizing
-    from sklearn.preprocessing import StandardScaler
-    scaler = StandardScaler()
-    normalized_data = scaler.fit_transform(df[normalize_features])
-    normalized_df = pd.DataFrame(normalized_data, columns=normalize_features)
-    df[normalize_features] = normalized_df
+    # from sklearn.preprocessing import StandardScaler
+    # scaler = StandardScaler()
+    # normalized_data = scaler.fit_transform(df[normalize_features])
+    # normalized_df = pd.DataFrame(normalized_data, columns=normalize_features)
+    # df[normalize_features] = normalized_df
 
     return df
