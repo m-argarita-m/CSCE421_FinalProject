@@ -20,10 +20,13 @@ def main():
     x = load_data("data/train_x.csv")
     y = load_data("data/train_y.csv")
 
-    train_x, train_y, val_x, val_y = split_data(x, y)
+    train_x, train_y, val_x, val_y = split_data(x, y, 2015)
 
     ###### Your Code Here #######
     # Add anything you want here
+
+    print("print(train_x.shape)", train_x.shape)
+    print("print(train_y.shape)", train_y.shape)
 
 
     test_x = load_data("data/test_x.csv")
@@ -36,12 +39,7 @@ def main():
     ###### Your Code Here #######
     # Add anything you want here
 
-    processed_x_val = preprocess_x(val_x)
-
-    # auc_roc = roc_auc_score(test_y, y_pred_proba[:,1])
-    # print("Taadaa: ", auc_roc)
-
-    # # x_train_agg = arr[np.argsort(arr[:, 1])]
+    # processed_x_val = preprocess_x(val_x)
 
     ############################
 
@@ -52,7 +50,7 @@ def main():
     ###### Your Code Here #######
     # Add anything you want here
 
-    model.score(processed_x_val, val_y)
+    # model.score(processed_x_val, val_y)
 
     ############################
 
