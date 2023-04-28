@@ -32,8 +32,8 @@ class Model():
         self.pivot_columns = ['nursingchartvalue', 'labresult']
 
         self.model = None
-        self.batch_size = 32
-        self.lr = 0.0001
+        self.batch_size = 128
+        self.lr = 0.00004
         ########################################################################
 
     def model_creation(self):
@@ -68,14 +68,14 @@ class Model():
             # return F.binary_cross_entropy_with_logits(inputs, targets, weight=weight)
             return F.binary_cross_entropy(inputs, targets)
 
-        num_epochs = 50
+        num_epochs = 150
         loss_fn = binary_cross_entropy_loss
         opt_fn = optim.Adam(self.model.parameters(), self.lr)
 
         dataset = self.to_dataset(x_train, y_train)
 
         val_frac =  0.2
-        rand_seed =  0
+        rand_seed =  42
         train_indices, val_indices = self.split_indices(len(dataset), val_frac, rand_seed)
 
 
