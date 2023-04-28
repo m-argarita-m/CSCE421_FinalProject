@@ -13,8 +13,10 @@ import matplotlib.pyplot as plt
 
 from neuralnet import NeuralNet
 from dataset import CustomDataset
-from torch.utils.data.sampler import SubsetRandomSampler
+from torch.utils.data.sampler import SubsetRandomSampler, WeightedRandomSampler
 from torch.utils.data.dataloader import DataLoader
+
+from imblearn.over_sampling import SMOTE
 
 class Model():
     def __init__(self, args):
@@ -31,6 +33,7 @@ class Model():
 
         self.model = None
         self.batch_size = 32
+        self.lr = 0.0001
         ########################################################################
 
     def model_creation(self):
@@ -61,27 +64,40 @@ class Model():
         import torch.optim as optim
 
         def binary_cross_entropy_loss(inputs, targets):
+            # weight = torch.tensor([1, 9], dtype=torch.float).to(device)
+            # return F.binary_cross_entropy_with_logits(inputs, targets, weight=weight)
             return F.binary_cross_entropy(inputs, targets)
 
-        num_epochs = 35
+        num_epochs = 50
         loss_fn = binary_cross_entropy_loss
-        opt_fn = optim.Adam(self.model.parameters(), lr = 0.0001)
+        opt_fn = optim.Adam(self.model.parameters(), self.lr)
 
         dataset = self.to_dataset(x_train, y_train)
 
         val_frac =  0.2
-        rand_seed =  42
+        rand_seed =  0
         train_indices, val_indices = self.split_indices(len(dataset), val_frac, rand_seed)
+
+
+        # targets = dataset.targets[train_indices]
+        # targets = targets.squeeze()
+        # class_counts = torch.bincount(targets.long())
+        # class_weights = 1.0 / class_counts.float()
+        # class_weights /= torch.sum(class_weights)
+        # weights = class_weights[targets.long()]
+        # train_sampler = WeightedRandomSampler(weights, len(weights))
 
         train_sampler = SubsetRandomSampler(train_indices)
         train_dl = DataLoader(dataset,
                             self.batch_size,
-                            sampler=train_sampler)
+                            sampler=train_sampler,
+                            drop_last=True)
 
         val_sampler = SubsetRandomSampler(val_indices)
         val_dl = DataLoader(dataset,
                         self.batch_size,
-                        sampler=val_sampler)
+                        sampler=val_sampler,
+                        drop_last=True)
 
         def get_default_device():
             """Use GPU if available, else CPU"""
@@ -125,13 +141,10 @@ class Model():
 
         indices, _ = self.split_indices(len(dataset), 0, rand_seed)
         sampler = SubsetRandomSampler(indices)
-        dl = DataLoader(dataset, self.batch_size, sampler=sampler)
+        dl = DataLoader(dataset, self.batch_size, sampler=sampler, drop_last=True)
         dl = DeviceDataLoader(dl, device)
 
-        num_epochs = 35
-        loss_fn = binary_cross_entropy_loss
-        opt_fn = optim.Adam(self.model.parameters(), lr = 0.0001)
-
+        opt_fn = optim.Adam(self.model.parameters(), self.lr)
         self.train_model(num_epochs, dl, [], loss_fn, opt_fn)
         ########################################################################
 
@@ -231,6 +244,10 @@ class Model():
         return False
 
     def aggregate(self, df):
+
+        # def furthest_from_zero(x):
+        #     return x.iloc[np.abs(x).argmax()]
+
         df = df.groupby('patientunitstayid', as_index=False).agg(np.nanmean)
         df = df.reset_index(drop=True)
         return df
@@ -264,10 +281,15 @@ class Model():
                 opt_fn.zero_grad()
 
                 y_pred_prob = self.model(x)
-                y_pred = (y_pred_prob >= 0.5).float()
+                y_pred = (y_pred_prob>= 0.5).float()
                 loss = loss_fn(y_pred_prob, y.float())
+                # y_pred = (y_pred_prob[:, 1] >= 0.5).float()
+                # targets = torch.cat([1-y, y], dim=1)
+                # loss = loss_fn(y_pred_prob, targets.float())
+
 
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 0.5)
                 opt_fn.step()
 
                 train_loss += len(x) * loss.item()
@@ -275,7 +297,8 @@ class Model():
                 count_total += len(x)
 
                 y_true_train += y.cpu().numpy().tolist()
-                y_pred_train += y_pred.cpu().numpy().tolist()
+                # y_pred_train += y_pred_prob[:, 1].detach().numpy().tolist()
+                y_pred_train += y_pred_prob.detach().numpy().tolist()
 
             train_loss = train_loss / count_total
             train_accuracy = count_correct / count_total
@@ -295,14 +318,18 @@ class Model():
                     for x, y_true in val_dl:
                         y_pred_prob = self.model(x)
                         y_pred = (y_pred_prob >= 0.5).float()
-                        loss = loss_fn(y_pred_prob, y_true.float())
+                        loss = loss_fn(y_pred_prob, y.float())
+                        # y_pred = (y_pred_prob[:, 1] >= 0.5).float()
+                        # targets = torch.cat([1-y, y], dim=1)
+                        # loss = loss_fn(y_pred_prob, targets.float())
 
                         val_loss += loss.item() * len(x)
                         count_correct += (y_pred == y_true.float()).sum().item()
                         count_total += len(x)
 
                         y_true_val += y_true.cpu().numpy().tolist()
-                        y_pred_val += y_pred.cpu().numpy().tolist()
+                        y_pred_val += y_pred_prob.cpu().numpy().tolist()
+                        # y_pred_val += y_pred_prob[:, 1].cpu().numpy().tolist()
 
                 val_loss = val_loss / count_total
                 val_accuracy = count_correct / count_total
@@ -321,6 +348,14 @@ class Model():
                         .format(epoch+1, n_epochs, train_loss, train_accuracy, train_roc_auc))
 
         if len(val_dl) > 0:
+            plt.plot(train_roc_aucs, "-x")
+            plt.plot(val_roc_aucs, "-o")
+            plt.xlabel("Epoch")
+            plt.ylabel("ROC AUC")
+            plt.legend(["Training", "Validation"])
+            plt.title("ROC AUC vs. No. of Epochs")
+            plt.show()
+
             plt.plot(train_losses, "-x")
             plt.plot(val_losses, "-o")
             plt.xlabel("Epoch")
@@ -341,6 +376,7 @@ class Model():
     def to_dataset(self, x, y):
 
         x = x.fillna(0)
+
         x = x.astype(np.float32).to_numpy()
         y = y.astype(np.int64).to_numpy()
 

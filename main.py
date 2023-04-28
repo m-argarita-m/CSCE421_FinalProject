@@ -20,7 +20,8 @@ def main():
     x = load_data("data/train_x.csv")
     y = load_data("data/train_y.csv")
 
-    train_x, train_y, val_x, val_y = split_data(x, y, 2015)
+    # train_x, train_y, val_x, val_y = split_data(x, y, 2015)
+    train_x, train_y = x, y
 
     ###### Your Code Here #######
     # Add anything you want here

@@ -7,10 +7,13 @@ class NeuralNet(nn.Module):
         ######################
         #   YOUR CODE HERE   #
 
-        self.fc1 = nn.Linear(30, 512)
-        self.fc2 = nn.Linear(512, 128)
-        self.fc3 = nn.Linear(128, 16)
-        self.fc4 = nn.Linear(16, 1)
+        self.fc1 = nn.Linear(30, 256)
+        self.dropout1 = nn.Dropout(p=0.5)
+        self.fc2 = nn.Linear(256, 256)
+        self.dropout2 = nn.Dropout(p=0.5)
+        self.fc3 = nn.Linear(256, 256)
+        self.dropout3 = nn.Dropout(p=0.5)
+        self.fc4 = nn.Linear(256, 1)
 
         ######################
 
@@ -20,8 +23,11 @@ class NeuralNet(nn.Module):
 
         X = X.view(-1, 30)
         X = F.relu(self.fc1(X))
+        X = self.dropout1(X)
         X = F.relu(self.fc2(X))
+        X = self.dropout2(X)
         X = F.relu(self.fc3(X))
+        X = self.dropout3(X)
         X = self.fc4(X)
         X = F.sigmoid(X)
         return X
