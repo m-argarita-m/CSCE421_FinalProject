@@ -7,6 +7,8 @@ import torch.nn.functional as F
 
 from sklearn.metrics import roc_auc_score, average_precision_score
 
+from aucroc import roc_star_loss, epoch_update_gamma
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -63,7 +65,7 @@ class Model():
         def binary_cross_entropy_loss(inputs, targets):
             return F.binary_cross_entropy(inputs, targets)
 
-        num_epochs = 35
+        num_epochs = 30
         loss_fn = binary_cross_entropy_loss
         opt_fn = optim.Adam(self.model.parameters(), lr = 0.0001)
 
@@ -260,15 +262,27 @@ class Model():
 
             self.model.train()
 
+            whole_y_pred=np.array([])
+            whole_y_t=np.array([])
+
             for x, y in train_dl:
+
                 opt_fn.zero_grad()
 
                 y_pred_prob = self.model(x)
                 y_pred = (y_pred_prob >= 0.5).float()
-                loss = loss_fn(y_pred_prob, y.float())
+
+                if epoch > 0 :
+                    loss = roc_star_loss(y, y_pred_prob, epoch_gamma, last_whole_y_t, last_whole_y_pred)
+                else:
+                    loss = loss_fn(y_pred_prob, y.float())
 
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 0.5)
                 opt_fn.step()
+
+                whole_y_pred = np.append(whole_y_pred, y_pred.clone().detach().cpu().numpy())
+                whole_y_t = np.append(whole_y_t, y.clone().detach().cpu().numpy())
 
                 train_loss += len(x) * loss.item()
                 count_correct += (y_pred == y.float()).sum().item()
@@ -276,6 +290,12 @@ class Model():
 
                 y_true_train += y.cpu().numpy().tolist()
                 y_pred_train += y_pred.cpu().numpy().tolist()
+
+            self.model.eval()
+            last_whole_y_t = torch.tensor(whole_y_t)
+            last_whole_y_pred = torch.tensor(whole_y_pred)
+
+            epoch_gamma = epoch_update_gamma(last_whole_y_t, last_whole_y_pred, epoch, 2)
 
             train_loss = train_loss / count_total
             train_accuracy = count_correct / count_total

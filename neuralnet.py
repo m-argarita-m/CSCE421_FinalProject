@@ -7,10 +7,11 @@ class NeuralNet(nn.Module):
         ######################
         #   YOUR CODE HERE   #
 
-        self.fc1 = nn.Linear(30, 512)
-        self.fc2 = nn.Linear(512, 128)
-        self.fc3 = nn.Linear(128, 16)
-        self.fc4 = nn.Linear(16, 1)
+        self.fc1 = nn.Linear(30, 64)
+        self.fc2 = nn.Linear(64, 64)
+        self.fc3 = nn.Linear(64, 64)
+        self.fc4 = nn.Linear(64, 64)
+        self.fc5 = nn.Linear(64, 1)
 
         ######################
 
@@ -22,7 +23,8 @@ class NeuralNet(nn.Module):
         X = F.relu(self.fc1(X))
         X = F.relu(self.fc2(X))
         X = F.relu(self.fc3(X))
-        X = self.fc4(X)
+        X = F.relu(self.fc4(X))
+        X = self.fc5(X)
         X = F.sigmoid(X)
         return X
         ######################
