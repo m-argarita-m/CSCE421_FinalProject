@@ -7,7 +7,7 @@ class NeuralNet(nn.Module):
         ######################
         #   YOUR CODE HERE   #
 
-        self.fc1 = nn.Linear(30, 256)
+        self.fc1 = nn.Linear(32, 256)
         self.dropout1 = nn.Dropout(p=0.5)
         self.fc2 = nn.Linear(256, 256)
         self.dropout2 = nn.Dropout(p=0.5)
@@ -21,7 +21,7 @@ class NeuralNet(nn.Module):
         ######################
         #   YOUR CODE HERE   #
 
-        X = X.view(-1, 30)
+        X = X.view(-1, 32)
         X = F.relu(self.fc1(X))
         X = self.dropout1(X)
         X = F.relu(self.fc2(X))

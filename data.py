@@ -41,21 +41,21 @@ def preprocess_x(df):
     # labname - 2 and null
     # nursingchartcelltypevalname - 10 and null
 
-    def pivot(df, column, values):
-        pivot_df = df.pivot(columns=column, values=values)
-        pivot_df = pivot_df.drop(pivot_df.columns[0], axis=1)
-        pivot_df.columns = [f"{values}_{i}" for i in pivot_df.columns]
+    # def pivot(df, column, values):
+    #     pivot_df = df.pivot(columns=column, values=values)
+    #     pivot_df = pivot_df.drop(pivot_df.columns[0], axis=1)
+    #     pivot_df.columns = [f"{values}_{i}" for i in pivot_df.columns]
 
-        df = pd.concat([df, pivot_df], axis=1)
+    #     df = pd.concat([df, pivot_df], axis=1)
 
-        df = df.drop(column, axis=1)
-        df = df.drop(values, axis=1)
+    #     df = df.drop(column, axis=1)
+    #     df = df.drop(values, axis=1)
 
-        return df
+    #     return df
 
     # some columns have a mixture of numerical and categorical data
     df['age'] = df['age'].apply(lambda x: float(x) if x != '> 89' else 90.0)
-    df['nursingchartvalue'] = df['nursingchartvalue'].apply(lambda x: None if type(x) != int else int(x))
+    df = df[df['nursingchartvalue'].apply(lambda x: str(x).isdigit())]
 
     # derive helpful feature
     df['bmi'] = df['admissionweight'] / (df['admissionheight'] ** 2)
@@ -67,19 +67,38 @@ def preprocess_x(df):
     df['gender'] = df['gender'].replace({'Female': 0, 'Male': 1})
 
     # pivot each type of test and its result to its own column
-    df = pivot(df, 'nursingchartcelltypevalname', 'nursingchartvalue')
-    df = pivot(df, 'labname', 'labresult')
+    # df = pivot(df, 'nursingchartcelltypevalname', 'nursingchartvalue')
+    # df = pivot(df, 'labname', 'labresult')
+
+    df_demographic = df[df['offset'] == 0.0]
+    df_sequential = df[df['offset'] != 0.0]
+
+    df_sequential = df_sequential.drop(['bmi','admissionheight','admissionweight','age','ethnicity','gender','unitvisitnumber'], axis=1)
+    df_demographic = df_demographic.drop(['cellattributevalue','labname','labresult','nursingchartcelltypevalname','nursingchartvalue','offset'], axis=1)
 
     # categorical features that need to become dummies
-    encode_features = ['ethnicity', 'cellattributevalue']
+    encode_features_demographic = ['ethnicity']
+    encode_features_sequential = ['cellattributevalue', 'nursingchartcelltypevalname', 'labname']
 
     # encoding
-    dummy_df = pd.get_dummies(df[encode_features])
-    dummy_df = dummy_df.isin([1.0]).mask(~dummy_df.isin([1.0]), np.nan).astype(float)
-    df = pd.concat([df, dummy_df], axis=1)
-    df = df.drop(encode_features, axis=1)
+    def encoding(df, encode_features):
+        dummy_df = pd.get_dummies(df[encode_features])
+        dummy_df = dummy_df.isin([1.0]).mask(~dummy_df.isin([1.0]), np.nan).astype(float)
+        df = pd.concat([df, dummy_df], axis=1)
+        df = df.drop(encode_features, axis=1)
+        return df
+
+    df_demographic = encoding(df_demographic, encode_features_demographic)
+    df_sequential = encoding(df_sequential, encode_features_sequential)
 
     # sort by column name
-    df = df.sort_index(axis=1)
+    df_demographic = df_demographic.sort_index(axis=1)
+    df_sequential = df_sequential.sort_index(axis=1)
+
+    print(df_demographic.columns)
+    print(df_sequential.columns)
+
+    combined_data = pd.merge(df_demographic, df_sequential, on='patientunitstayid')
+    combined_data.to_csv("combined.csv", index=False, float_format='%.14f')
 
     return df

@@ -31,6 +31,7 @@ class Model():
         self.normalized_columns = ['age', 'admissionheight', 'admissionweight', 'bmi', 'offset', 'unitvisitnumber']
         self.pivot_columns = ['nursingchartvalue', 'labresult']
 
+
         self.model = None
         self.batch_size = 128
         self.lr = 0.00004
@@ -178,23 +179,6 @@ class Model():
 
         ########################################################################
         return preds
-
-    # def score(self, x_val, y_val):
-    #     x_val = self.fix_columns(self.columns, x_val)
-    #     x_val = self.test_normalize(x_val)
-    #     x_val = self.aggregate(x_val)
-
-    #     x_val = x_val.sort_values('patientunitstayid')
-    #     y_val = y_val.sort_values('patientunitstayid')
-
-    #     x_val.to_csv("x_val.csv", index=False)
-
-    #     x_val = x_val.drop('patientunitstayid', axis=1)
-
-    #     pred_proba = self.model.predict_proba(x_val)
-
-    #     score = roc_auc_score(y_val['hospitaldischargestatus'], pred_proba[:,1])
-    #     print('ROC-AOC:', score)
 
     def train_normalize(self, df):
         # pivot creates new columns, these columns need to be normalized too
