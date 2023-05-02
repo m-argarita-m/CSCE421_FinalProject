@@ -4,6 +4,7 @@ from sklearn.preprocessing import StandardScaler
 import torch
 from torchinfo import summary
 import torch.nn.functional as F
+from torch.nn.utils.rnn import pad_sequence
 
 from sklearn.metrics import roc_auc_score, average_precision_score
 
@@ -48,12 +49,15 @@ class Model():
         self.columns = x_train.columns
 
         x_train = self.train_normalize(x_train)
-        x_train = self.aggregate(x_train)
+        # x_train = self.aggregate(x_train)
 
-        x_train = x_train.sort_values('patientunitstayid')
+        x_train = x_train.sort_values(['patientunitstayid', 'offset'])
         y_train = y_train.sort_values('patientunitstayid')
 
-        x_train = x_train.drop('patientunitstayid', axis=1)
+        sequences = [torch.tensor(x.to_numpy()) for _, x in x_train.groupby("patientunitstayid")]
+        padded_sequences = torch.nn.utils.rnn.pad_sequence(sequences, batch_first=True)
+
+        # x_train = x_train.drop('patientunitstayid', axis=1)
         y_train = y_train.drop('patientunitstayid', axis=1)
 
         # define model
@@ -77,16 +81,13 @@ class Model():
 
         val_frac =  0.2
         rand_seed =  42
-        train_indices, val_indices = self.split_indices(len(dataset), val_frac, rand_seed)
+        train_indices, val_indices = self.split_indices(len(padded_sequences), val_frac, rand_seed)
 
-
-        # targets = dataset.targets[train_indices]
-        # targets = targets.squeeze()
-        # class_counts = torch.bincount(targets.long())
-        # class_weights = 1.0 / class_counts.float()
-        # class_weights /= torch.sum(class_weights)
-        # weights = class_weights[targets.long()]
-        # train_sampler = WeightedRandomSampler(weights, len(weights))
+        # def collate_fn(batch):
+        #     batch.sort(key=lambda x: len(x[0]), reverse=True)
+        #     sequences, labels = zip(*batch)
+        #     padded_sequences = pad_sequence(sequences, batch_first=True, padding_value=0)
+        #     return padded_sequences, torch.tensor(labels)
 
         train_sampler = SubsetRandomSampler(train_indices)
         train_dl = DataLoader(dataset,
@@ -140,7 +141,7 @@ class Model():
         self.model = NeuralNet()
         to_device(self.model, device)
 
-        indices, _ = self.split_indices(len(dataset), 0, rand_seed)
+        indices, _ = self.split_indices(dataset, 0, rand_seed)
         sampler = SubsetRandomSampler(indices)
         dl = DataLoader(dataset, self.batch_size, sampler=sampler, drop_last=True)
         dl = DeviceDataLoader(dl, device)
@@ -349,12 +350,9 @@ class Model():
             plt.show()
 
     def split_indices(self, n, val_frac, seed):
-        # Determine the size of the validation set
         n_val = int(val_frac * n)
         np.random.seed(seed)
-        # Create random permutation between 0 to n-1
         idxs = np.random.permutation(n)
-        # Pick first n_val indices for validation set
         return idxs[n_val:], idxs[:n_val]
 
     def to_dataset(self, x, y):
