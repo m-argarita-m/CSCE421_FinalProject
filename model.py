@@ -17,7 +17,7 @@ from dataset import CustomDataset
 from torch.utils.data.sampler import SubsetRandomSampler, WeightedRandomSampler
 from torch.utils.data.dataloader import DataLoader
 
-from imblearn.over_sampling import SMOTE
+# from imblearn.over_sampling import SMOTE
 
 class Model():
     def __init__(self, args):
@@ -34,13 +34,14 @@ class Model():
 
 
         self.model = None
-        self.batch_size = 128
-        self.lr = 0.00004
+        self.batch_size = 32
+        self.lr = 0.001
+        self.pad_length = 0
         ########################################################################
 
     def model_creation(self):
         self.model = NeuralNet()
-        summary(self.model, input_size=(self.batch_size, 1, 30))
+        summary(self.model, input_size=(self.batch_size, self.pad_length, 36))
 
     def fit(self, x_train, y_train, x_val=None, y_val=None):
         ############################ Your Code Here ############################
@@ -54,8 +55,13 @@ class Model():
         x_train = x_train.sort_values(['patientunitstayid', 'offset'])
         y_train = y_train.sort_values('patientunitstayid')
 
-        sequences = [torch.tensor(x.to_numpy()) for _, x in x_train.groupby("patientunitstayid")]
+        # x_train.to_csv("combined-test.csv", index=False, float_format='%.14f')
+        x_train = x_train.fillna(0)
+
+        sequences = [torch.tensor(x.drop('patientunitstayid', axis=1).to_numpy()) for _, x in x_train.groupby("patientunitstayid")]
         padded_sequences = torch.nn.utils.rnn.pad_sequence(sequences, batch_first=True)
+
+        self.pad_length = padded_sequences.size()[0]
 
         # x_train = x_train.drop('patientunitstayid', axis=1)
         y_train = y_train.drop('patientunitstayid', axis=1)
@@ -77,11 +83,11 @@ class Model():
         loss_fn = binary_cross_entropy_loss
         opt_fn = optim.Adam(self.model.parameters(), self.lr)
 
-        dataset = self.to_dataset(x_train, y_train)
+        dataset = self.to_dataset(padded_sequences, y_train)
 
         val_frac =  0.2
         rand_seed =  42
-        train_indices, val_indices = self.split_indices(len(padded_sequences), val_frac, rand_seed)
+        train_indices, val_indices = self.split_indices(len(dataset), val_frac, rand_seed)
 
         # def collate_fn(batch):
         #     batch.sort(key=lambda x: len(x[0]), reverse=True)
@@ -138,37 +144,39 @@ class Model():
 
         self.train_model(num_epochs, train_dl, val_dl, loss_fn, opt_fn)
 
-        self.model = NeuralNet()
-        to_device(self.model, device)
+        # self.model = NeuralNet()
+        # to_device(self.model, device)
 
-        indices, _ = self.split_indices(dataset, 0, rand_seed)
-        sampler = SubsetRandomSampler(indices)
-        dl = DataLoader(dataset, self.batch_size, sampler=sampler, drop_last=True)
-        dl = DeviceDataLoader(dl, device)
+        # indices, _ = self.split_indices(dataset, 0, rand_seed)
+        # sampler = SubsetRandomSampler(indices)
+        # dl = DataLoader(dataset, self.batch_size, sampler=sampler, drop_last=True)
+        # dl = DeviceDataLoader(dl, device)
 
-        opt_fn = optim.Adam(self.model.parameters(), self.lr)
-        self.train_model(num_epochs, dl, [], loss_fn, opt_fn)
+        # opt_fn = optim.Adam(self.model.parameters(), self.lr)
+        # self.train_model(num_epochs, dl, [], loss_fn, opt_fn)
         ########################################################################
 
-    def predict_proba(self, x):
+    def predict_proba(self, x_test):
         ############################ Your Code Here ############################
         # Predict the probability of in-hospital mortaility for each x
 
-        x = self.fix_columns(self.columns, x)
-        x = self.test_normalize(x)
-        x = self.aggregate(x)
+        x_test = self.fix_columns(self.columns, x_test)
+        x_test = self.test_normalize(x_test)
+        # x = self.aggregate(x)
 
-        ids = x['patientunitstayid']
-        x = x.drop('patientunitstayid', axis=1)
+        ids = x_test['patientunitstayid']
+        x_test = x_test.drop('patientunitstayid', axis=1)
 
-        x = x.fillna(0)
-        x = x.astype(np.float32).to_numpy()
-        x = torch.from_numpy(x)
+        x_test = x_test.fillna(0)
+
+        sequences = [torch.tensor(x.drop('patientunitstayid', axis=1).to_numpy()) for _, x in x_test.groupby("patientunitstayid")]
+        padded_sequences = torch.nn.utils.rnn.pad_sequence(sequences, batch_first=True)
 
         preds = []
         with torch.no_grad():
             self.model.eval()
-            preds = self.model(x)
+            self.model.double()
+            preds = self.model(padded_sequences.double())
 
         df_combined = pd.concat([ids, pd.Series(preds.flatten().tolist())], axis=1)
 
@@ -261,13 +269,15 @@ class Model():
             y_true_train, y_pred_train = [], []
 
             self.model.train()
+            self.model.double()
 
             for x, y in train_dl:
+                print("------BATCH")
                 opt_fn.zero_grad()
 
-                y_pred_prob = self.model(x)
-                y_pred = (y_pred_prob>= 0.5).float()
-                loss = loss_fn(y_pred_prob, y.float())
+                y_pred_prob = self.model(x.double())
+                y_pred = (y_pred_prob>= 0.5).double()
+                loss = loss_fn(y_pred_prob, y.double())
                 # y_pred = (y_pred_prob[:, 1] >= 0.5).float()
                 # targets = torch.cat([1-y, y], dim=1)
                 # loss = loss_fn(y_pred_prob, targets.float())
@@ -283,7 +293,7 @@ class Model():
 
                 y_true_train += y.cpu().numpy().tolist()
                 # y_pred_train += y_pred_prob[:, 1].detach().numpy().tolist()
-                y_pred_train += y_pred_prob.detach().numpy().tolist()
+                y_pred_train += y_pred_prob.detach().cpu().numpy().tolist()
 
             train_loss = train_loss / count_total
             train_accuracy = count_correct / count_total
@@ -298,18 +308,19 @@ class Model():
                 y_true_val, y_pred_val = [], []
 
                 self.model.eval()
+                self.model.double()
 
                 with torch.no_grad():
                     for x, y_true in val_dl:
-                        y_pred_prob = self.model(x)
-                        y_pred = (y_pred_prob >= 0.5).float()
-                        loss = loss_fn(y_pred_prob, y.float())
+                        y_pred_prob = self.model(x.double())
+                        y_pred = (y_pred_prob >= 0.5).double()
+                        loss = loss_fn(y_pred_prob, y.double())
                         # y_pred = (y_pred_prob[:, 1] >= 0.5).float()
                         # targets = torch.cat([1-y, y], dim=1)
                         # loss = loss_fn(y_pred_prob, targets.float())
 
                         val_loss += loss.item() * len(x)
-                        count_correct += (y_pred == y_true.float()).sum().item()
+                        count_correct += (y_pred == y_true.double()).sum().item()
                         count_total += len(x)
 
                         y_true_val += y_true.cpu().numpy().tolist()
@@ -357,12 +368,12 @@ class Model():
 
     def to_dataset(self, x, y):
 
-        x = x.fillna(0)
+        # x = x.fillna(0)
 
-        x = x.astype(np.float32).to_numpy()
+        # x = x.astype(np.float32).to_numpy()
         y = y.astype(np.int64).to_numpy()
 
-        x = torch.from_numpy(x)
+        # x = torch.from_numpy(x)
         y = torch.from_numpy(y)
 
         dataset = CustomDataset(x, y)

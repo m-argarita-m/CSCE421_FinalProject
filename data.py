@@ -63,27 +63,32 @@ def preprocess_x(df):
     # remove redundant data
     df = df.drop(['celllabel', 'labmeasurenamesystem'], axis=1)
 
-    # encode columns
-    gender_map = {'Female': 1, 'Male': 2, '': 0}
-    df['gender'] = df['gender'].apply(lambda x: gender_map.get(x, 0))
+    # binary colunn gets encoded
+    df['gender'] = df['gender'].replace({'Female': 0, 'Male': 1})
 
-    ethnicity_map = {'Asian': 1, 'African American': 2, 'Caucasian': 3, 'Hispanic': 4, 'Native American': 5, 'Other/Unknown': 0, '': 0}
-    df['ethnicity'] = df['ethnicity'].apply(lambda x: ethnicity_map.get(x, 0))
-
-    cellattributevalue_map = {'< 2 seconds': 1, '> 2 seconds': 2, 'feets': 3, 'hands': 4, 'normal': 5, '': 0}
-    df['cellattributevalue'] = df['cellattributevalue'].apply(lambda x: cellattributevalue_map.get(x, 0))
-
-    nursingchartcelltypevalname_map = {'GCS Total': 1, 'Heart Rate': 2, 'Invasive BP Diastolic': 3, 'Invasive BP Mean': 4, 'Invasive BP Systolic': 5, 'Non-Invasive BP Diastolic': 6, 'Non-Invasive BP Mean': 7, 'Non-Invasive BP Systolic': 8, 'O2 Saturation': 9, 'Respiratory Rate': 10, '': 0}
-    df['nursingchartcelltypevalname'] = df['nursingchartcelltypevalname'].apply(lambda x: nursingchartcelltypevalname_map.get(x, 0))
-
-    labname_map = {'glucose': 1, 'pH': 2, '': 0}
-    df['labname'] = df['labname'].apply(lambda x: labname_map.get(x, 0))
 
     df_demographic = df[df['unitvisitnumber'].notnull()]
     df_sequential = df[df['unitvisitnumber'].isnull()]
 
     df_sequential = df_sequential.drop(['bmi','admissionheight','admissionweight','age','ethnicity','gender','unitvisitnumber'], axis=1)
     df_demographic = df_demographic.drop(['cellattributevalue','labname','labresult','nursingchartcelltypevalname','nursingchartvalue','offset'], axis=1)
+
+    encode_features_demographic = ['ethnicity']
+    encode_features_sequential = ['cellattributevalue', 'nursingchartcelltypevalname', 'labname']
+
+    # encoding
+    def encoding(df, encode_features):
+        dummy_df = pd.get_dummies(df[encode_features])
+        dummy_df = dummy_df.isin([1.0]).mask(~dummy_df.isin([1.0]), np.nan).astype(float)
+        null_cols = df[encode_features].isnull().astype(int).add_suffix('_null')
+        df = pd.concat([df, dummy_df], axis=1)
+        df = pd.concat([df, null_cols], axis=1)
+        df = df.drop(encode_features, axis=1)
+
+        return df
+
+    df_demographic = encoding(df_demographic, encode_features_demographic)
+    df_sequential = encoding(df_sequential, encode_features_sequential)
 
     # sort by column name
     df_demographic = df_demographic.sort_index(axis=1)
@@ -92,4 +97,4 @@ def preprocess_x(df):
     combined_data = pd.merge(df_demographic, df_sequential, on='patientunitstayid')
     combined_data.to_csv("combined.csv", index=False, float_format='%.14f')
 
-    return df
+    return combined_data

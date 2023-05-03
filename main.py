@@ -35,7 +35,7 @@ def main():
     ############################
 
     processed_x_train = preprocess_x(train_x)
-    # processed_x_test = preprocess_x(test_x)
+    processed_x_test = preprocess_x(test_x)
 
     ###### Your Code Here #######
     # Add anything you want here

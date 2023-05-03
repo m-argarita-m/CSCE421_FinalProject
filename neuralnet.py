@@ -15,27 +15,21 @@ class NeuralNet(nn.Module):
         # self.dropout3 = nn.Dropout(p=0.5)
         # self.fc4 = nn.Linear(256, 1)
 
-        self.lstm = nn.LSTM(input_size = 31,
-                            hidden_size =64,
+        self.lstm = nn.LSTM(input_size = 36,
+                            hidden_size =128,
                             num_layers =1,
                             batch_first=True)
 
-        self.linear = nn.Linear(64, 1)
+        self.linear = nn.Linear(128, 1)
 
         ######################
 
     def forward(self, X):
         ######################
         #   YOUR CODE HERE   #
-
-        X = X.view(-1, 32)
-        X = F.relu(self.fc1(X))
-        X = self.dropout1(X)
-        X = F.relu(self.fc2(X))
-        X = self.dropout2(X)
-        X = F.relu(self.fc3(X))
-        X = self.dropout3(X)
-        X = self.fc4(X)
-        X = F.sigmoid(X)
+        X, _ = self.lstm(X)
+        X = X[:, -1, :]
+        X = self.linear(X)
+        X = nn.sigmoid(X)
         return X
         ######################
