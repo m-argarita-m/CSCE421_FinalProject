@@ -26,10 +26,6 @@ def main():
     ###### Your Code Here #######
     # Add anything you want here
 
-    print("print(train_x.shape)", train_x.shape)
-    print("print(train_y.shape)", train_y.shape)
-
-
     test_x = load_data("data/test_x.csv")
 
     ############################
@@ -56,7 +52,6 @@ def main():
     ############################
 
     processed_x_test = preprocess_x(x)
-
     prediction_probs = model.predict_proba(processed_x_test)
 
     #### Your Code Here ####
